@@ -19,6 +19,6 @@ for %%F in (%files%) do (
     echo Debug: Replacement complete for %%F!
 )
 
-git add -A > NUL
+git add -A > NULL
 git commit -m "Website updates." > NUL
 git push origin main > NUL
