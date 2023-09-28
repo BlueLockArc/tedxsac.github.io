@@ -1,0 +1,18 @@
+.d-flex {
+  display: flex !important;
+}
+
+.toggleable, .hide {
+  display: none !important;
+}
+
+.iti__flag {
+  background-image: url("../../assets/img/flags.png?h=7b0e6555b30d68cb396db30c12112f8b");
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .iti__flag {
+    background-image: url("../../assets/img/flags@2x.png?h=9d2c646fee2e02966b22a06db5368292");
+  }
+}
+
