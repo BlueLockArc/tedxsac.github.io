@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 
 set "search=http://127.0.0.1:5000"
 set "replace=https://tedxsac.up.railway.app"
-set "files=index.html admin.html registration.html"
+set "files=main.js"
 
 echo Debug: Search string is "%search%"
 echo Debug: Replace string is "%replace%"
@@ -19,6 +19,6 @@ for %%F in (%files%) do (
     echo Debug: Replacement complete for %%F!
 )
 
-git add -A
-git commit -m "Website updates." 
+git add -A > NUL
+git commit -m "Website updates." > NUL
 git push origin main > NUL
