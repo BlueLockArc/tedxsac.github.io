@@ -20,5 +20,5 @@ for %%F in (%files%) do (
 )
 
 git add -A > NULL
-git commit -m "Website updates." > NUL
+git commit -m "Website updates." > NULL
 git push origin main > NUL
