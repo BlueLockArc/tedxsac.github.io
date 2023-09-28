@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 
 set "search=http://127.0.0.1:5000"
 set "replace=https://tedxsac.up.railway.app"
-set "files=assests/js/main.min.js"
+set "files=assets/js/main.min.js"
 
 echo Debug: Search string is "%search%"
 echo Debug: Replace string is "%replace%"
