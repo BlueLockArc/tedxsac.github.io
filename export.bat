@@ -16,5 +16,6 @@ for %%F in (%files%) do (
 
     echo Replacement complete for !input_file!. Modified output saved to !output_file!
 )
-git add -A git commit -m "Website updates." 
+git add -A
+git commit -m "Website updates." 
 git push origin main
