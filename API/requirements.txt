@@ -1,7 +1,6 @@
 bs4
 requests
 fastapi
-uvicorn
+uvicorn[standard]
 databases
 databases[aiomysql]
-hypercorn
