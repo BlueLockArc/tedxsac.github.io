@@ -10,6 +10,7 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from databases import Database
 from fastapi.middleware.cors import CORSMiddleware
+import hypercorn
 
 database = Database("mysql+aiomysql://tedxtest:tedxtest@db4free.net:3306/tedxtest")
 
@@ -167,9 +168,4 @@ async def register(request: Request):
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", default=5000)),
-        reload=True,
-    )
+    hypercorn.run(app, host="0.0.0.0")

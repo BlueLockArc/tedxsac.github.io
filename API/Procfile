@@ -1,1 +1,0 @@
-hypercorn main:app
