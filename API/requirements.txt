@@ -4,3 +4,4 @@ fastapi
 uvicorn
 databases
 databases[aiomysql]
+hypercorn
