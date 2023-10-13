@@ -288,45 +288,18 @@ async def partial(request: Request):
 
         payment_type = await get_payment_type(email)
         if payment_type == "full":
-            return send_json({"msg": "Invalid Payment Type"}, 520)
+            return send_json({"msg": "Invalid Payment Type\nNot allowed"}, 520)
         elif payment_type == "partial":  # payment type is partial
             query = "SELECT `first_status`,`second_status` FROM `partial` WHERE `email` = :email"
             values = {"email": email}
             result = await database.fetch_one(query=query, values=values)
-
-            # second payment can be null,pending, verified and first payment can be pending, verified
-
-            if result[1] == "pending":  # second pending
-                return send_json({"msg": "pending2"}, 310)
-                # if result[1] == "verified":
-                #     return send_json({"msg": "verified2"}, 310)
-            elif result[0] == "verified" and not:  # first verified
-                return send_json({"msg": "verified1"}, 310)
+            if result[0] != "verified" and result[1]:  # first verified
+                return send_json({"msg": "Invalid Payment Type\nNot allowed"}, 520)
         transaction = await database.transaction()
         try:
-            query = "INSERT INTO attendees (`email`, `name`, `wa_num`,`ph_num`, `aloy`, `payment_type`) VALUES (:email, :name, :wa_number, :ph_number, :aloy, :payment_type)"
-            values = {
-                "name": name,
-                "email": email,
-                "wa_number": wa_number,
-                "ph_number": ph_number,
-                "aloy": aloy,
-                "payment_type": payment_type,
-            }
-            await database.execute(query=query, values=values)
-
-            if aloy:
-                query = "INSERT INTO aloy (`email`, `regno`) VALUES (:email, :regno)"
-                values = {"email": email, "regno": regno}
-                await database.execute(query=query, values=values)
-
+            query = "UPDATE `partial` SET `second_ref` = :ref, `second_status` = :status WHERE `email` = :email"
             values = {"email": email, "ref": upi_ref_no, "status": "pending"}
-            if payment_type == "partial":
-                query = "INSERT INTO partial (`email`, `first_ref`, `first_status`) VALUES (:email, :ref, :status)"
-            elif payment_type == "full":
-                query = "INSERT INTO `full` (`email`, `ref`, `status`) VALUES (:email, :ref, :status)"
             await database.execute(query=query, values=values)
-            await transaction.commit()
             return send_json({"msg": "Success"}, 200)
 
         except pymysql.err.IntegrityError as e:
