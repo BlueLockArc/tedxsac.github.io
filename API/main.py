@@ -142,23 +142,25 @@ async def check(email: str):
                 result = await database.fetch_one(query=query, values=values)
                 return send_json({"msg": result[0]}, 310)
             elif payment_type == "partial":  # payment type is partial
-                query = "SELECT `second_status`,`first_status` FROM `partial` WHERE `email` = :email"
+                query = "SELECT `first_status`,`second_status` FROM `partial` WHERE `email` = :email"
                 values = {"email": email}
                 result = await database.fetch_one(query=query, values=values)
 
                 # second payment can be null,pending, verified and first payment can be pending, verified
-                if result[1]:
-                    if result[1] == "pending":
-                        return send_json({"msg": "pending2"}, 310)
+
+                if result[1] == "pending":  # second pending
+                    return send_json({"msg": "pending2"}, 310)
                     # if result[1] == "verified":
                     #     return send_json({"msg": "verified2"}, 310)
-                else:
-                    if result[0] == "pending":
-                        return send_json({"msg": "pending1"}, 310)
-                    # if result[0] == "verified":
-                    #     return send_json({"msg": "verified1"}, 310)
+                elif result[0] == "pending":  # first pending
+                    return send_json({"msg": "pending1"}, 310)
+                elif result[0] == "verified":  # first verified
+                    return send_json({"msg": "verified1"}, 310)
             else:  # payment type is not set
-                return send_json({"msg": "Payment Type not set\nError Code:1-2 Contact Developer"}, 520)
+                return send_json(
+                    {"msg": "Payment Type not set\nError Code:1-2 Contact Developer"},
+                    520,
+                )
     else:  # email does not exist
         return send_json({}, 200)
 
@@ -251,7 +253,94 @@ async def register(request: Request):
             print(email, traceback.format_exc())
             await transaction.rollback()
             return send_json({"msg": "Internal Error: 2-4\nContact Developer"}, 520)
-        
+
+    except Exception as e:
+        print(traceback.format_exc())
+        return send_json({"msg": "Internal Error: 4-6x\nContact Developer"}, 520)
+
+
+@app.post("/partial")
+async def partial(request: Request):
+    try:
+        data = await request.json()
+        try:
+            email, upi_ref_no = (
+                data.get(key, "").strip() for key in ["email", "upi_ref_no"]
+            )
+        except AttributeError as e:
+            return send_json({"msg": "Error Request"}, 520)
+        email = email.lower()
+
+        if not all([email, upi_ref_no]):
+            return send_json({"msg": "Invalid Request"}, 520)
+
+        if not all(
+            is_valid(value, pattern)
+            for value, pattern in zip(
+                [email, upi_ref_no],
+                [EMAIL_PATTERN, UPI_REF_PATTERN],
+            )
+        ):
+            return send_json({"msg": "Invalid Input"}, 520)
+
+        if not await is_email_exists(email):
+            return send_json({"msg": "Not registered"}, 520)
+
+        payment_type = await get_payment_type(email)
+        if payment_type == "full":
+            return send_json({"msg": "Invalid Payment Type"}, 520)
+        elif payment_type == "partial":  # payment type is partial
+            query = "SELECT `first_status`,`second_status` FROM `partial` WHERE `email` = :email"
+            values = {"email": email}
+            result = await database.fetch_one(query=query, values=values)
+
+            # second payment can be null,pending, verified and first payment can be pending, verified
+
+            if result[1] == "pending":  # second pending
+                return send_json({"msg": "pending2"}, 310)
+                # if result[1] == "verified":
+                #     return send_json({"msg": "verified2"}, 310)
+            elif result[0] == "pending":  # first pending
+                return send_json({"msg": "pending1"}, 310)
+            elif result[0] == "verified":  # first verified
+                return send_json({"msg": "verified1"}, 310)
+        transaction = await database.transaction()
+        try:
+            query = "INSERT INTO attendees (`email`, `name`, `wa_num`,`ph_num`, `aloy`, `payment_type`) VALUES (:email, :name, :wa_number, :ph_number, :aloy, :payment_type)"
+            values = {
+                "name": name,
+                "email": email,
+                "wa_number": wa_number,
+                "ph_number": ph_number,
+                "aloy": aloy,
+                "payment_type": payment_type,
+            }
+            await database.execute(query=query, values=values)
+
+            if aloy:
+                query = "INSERT INTO aloy (`email`, `regno`) VALUES (:email, :regno)"
+                values = {"email": email, "regno": regno}
+                await database.execute(query=query, values=values)
+
+            values = {"email": email, "ref": upi_ref_no, "status": "pending"}
+            if payment_type == "partial":
+                query = "INSERT INTO partial (`email`, `first_ref`, `first_status`) VALUES (:email, :ref, :status)"
+            elif payment_type == "full":
+                query = "INSERT INTO `full` (`email`, `ref`, `status`) VALUES (:email, :ref, :status)"
+            await database.execute(query=query, values=values)
+            await transaction.commit()
+            return send_json({"msg": "Success"}, 200)
+
+        except pymysql.err.IntegrityError as e:
+            print(email, e)
+            await transaction.rollback()
+            return send_json({"msg": str(e)}, 520)
+
+        except Exception as e:
+            print(email, traceback.format_exc())
+            await transaction.rollback()
+            return send_json({"msg": "Internal Error: 2-4\nContact Developer"}, 520)
+
     except Exception as e:
         print(traceback.format_exc())
         return send_json({"msg": "Internal Error: 4-6x\nContact Developer"}, 520)
