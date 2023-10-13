@@ -18,11 +18,13 @@ PHONE_PATTERN = r"^\+\d{1,3}\d{1,14}$"
 UPI_REF_PATTERN = r"^\d{12}$"
 
 # Database connection
-database = Database("mysql+aiomysql://tedxtest:tedxtest@db4free.net:3306/tedxtest")
+database = Database(
+    "mysql+aiomysql://u293549859_tedxsac:4&Xa=kGQ3@auth-db198.hstgr.io:3306/u293549859_tedxsac"
+)
 
 """Database Schema
 CREATE TABLE `attendees` (
-    `email` VARCHAR(200) NOT NULL,
+    `email` VARCHAR(200) NOT NULL UNIQUE,
     `name` VARCHAR(100) NOT NULL,
     `wa_num` VARCHAR(20) NOT NULL,
     `ph_num` VARCHAR(20),
@@ -35,7 +37,7 @@ CREATE TABLE `attendees` (
 );
 
 CREATE TABLE `aloy` (
-    `email` VARCHAR(200) NOT NULL,
+    `email` VARCHAR(200) NOT NULL UNIQUE,
     `regno` VARCHAR(10) NOT NULL UNIQUE,
     PRIMARY KEY (`email`),
     INDEX `idx_regno` (`regno`),
@@ -43,7 +45,7 @@ CREATE TABLE `aloy` (
 );
 
 CREATE TABLE `partial` (
-    `email` VARCHAR(200) NOT NULL,
+    `email` VARCHAR(200) NOT NULL UNIQUE,
     `first_ref` VARCHAR(12) NOT NULL UNIQUE,
     `first_status` VARCHAR(20) NOT NULL,
     `second_ref` VARCHAR(12) UNIQUE,
@@ -55,7 +57,7 @@ CREATE TABLE `partial` (
 );
 
 CREATE TABLE `full` (
-    `email` VARCHAR(200) NOT NULL,
+    `email` VARCHAR(200) NOT NULL UNIQUE,
     `ref` VARCHAR(12) NOT NULL UNIQUE,
     `status` VARCHAR(20) NOT NULL,
     PRIMARY KEY (`email`),
@@ -124,42 +126,51 @@ async def is_payment_done(email):
     query = "SELECT `paid` FROM attendees WHERE `email` = :email"
     values = {"email": email}
     result = await database.fetch_one(query=query, values=values)
-    return bool(result)
+    return bool(result[0])
 
 
 @app.get("/check/{email}")
 async def check(email: str):
-    email = email.strip().lower()
-    if not is_valid(email, EMAIL_PATTERN):  # invalid
-        return send_json({"msg": "Invalid Email"}, 520)
-    elif await is_email_exists(email):  # email exists
-        if is_payment_done(email) == 1:  # payment status is true
-            return send_json({"msg": "Payment Done"}, 222)
-        else:
-            payment_type = await get_payment_type(email)
-            if payment_type == "full":  # payment type is full
-                query = "SELECT `status` FROM `full` WHERE `email` = :email"
-                values = {"email": email}
-                result = await database.fetch_one(query=query, values=values)
-                return send_json({"msg": result[0]}, 310)
-            elif payment_type == "partial":  # payment type is partial
-                query = "SELECT `first_status`,`second_status` FROM `partial` WHERE `email` = :email"
-                values = {"email": email}
-                result = await database.fetch_one(query=query, values=values)
+    try:
+        email = email.strip().lower()
+        if not is_valid(email, EMAIL_PATTERN):  # invalid
+            return send_json({"msg": "Invalid Email"}, 520)
+        elif await is_email_exists(email):  # email exists
+            if await is_payment_done(email):  # payment status is true
+                return send_json({"msg": "Payment Done"}, 222)
+            else:
+                payment_type = await get_payment_type(email)
+                if payment_type == "full":  # payment type is full
+                    query = "SELECT `status` FROM `full` WHERE `email` = :email"
+                    values = {"email": email}
+                    result = await database.fetch_one(query=query, values=values)
+                    return send_json({"msg": result[0]}, 310)
+                elif payment_type == "partial":  # payment type is partial
+                    query = """SELECT p.first_status, p.second_status, ( SELECT a.name FROM attendees AS a WHERE a.email = :email )
+                    AS name FROM partial AS p WHERE p.email = :email;"""
+                    values = {"email": email}
+                    result = await database.fetch_one(query=query, values=values)
 
-                # second payment can be null,pending, verified and first payment can be pending, verified
+                    # second payment can be null,pending, verified and first payment can be pending, verified
 
-                if result[1] == "pending" or result[0] == "pending":  # second pending
-                    return send_json({"msg": "pending"}, 310)
-                elif result[0] == "verified":  # first verified
-                    return send_json({"msg": "verified"}, 310)
-            else:  # payment type is not set
-                return send_json(
-                    {"msg": "Payment Type not set\nError Code:1-2 Contact Developer"},
-                    520,
-                )
-    else:  # email does not exist
-        return send_json({}, 200)
+                    if (
+                        result[1] == "pending" or result[0] == "pending"
+                    ):  # second pending
+                        return send_json({"msg": "pending"}, 310)
+                    elif result[0] == "verified":  # first verified
+                        return send_json({"msg": "verified", "name": result[2]}, 310)
+                else:  # payment type is not set
+                    return send_json(
+                        {
+                            "msg": "Payment Type not set\nError Code:1-2 Contact Developer"
+                        },
+                        520,
+                    )
+        else:  # email does not exist
+            return send_json({}, 200)
+    except Exception as e:
+        print(traceback.format_exc())
+        return send_json({"msg": "Internal Error: c-2x\nContact Developer"}, 520)
 
 
 @app.post("/register")
@@ -269,7 +280,7 @@ async def second(request: Request):
         email = email.lower()
 
         if not all([email, upi_ref_no]):
-            return send_json({"msg": "Invalid Request"}, 520)
+            return send_json({"msg": "Invalid request"}, 520)
 
         if not all(
             is_valid(value, pattern)
@@ -297,6 +308,7 @@ async def second(request: Request):
             query = "UPDATE `partial` SET `second_ref` = :ref, `second_status` = :status WHERE `email` = :email"
             values = {"email": email, "ref": upi_ref_no, "status": "pending"}
             await database.execute(query=query, values=values)
+            await transaction.commit()
             return send_json({"msg": "Success"}, 200)
 
         except pymysql.err.IntegrityError as e:
@@ -307,11 +319,11 @@ async def second(request: Request):
         except Exception as e:
             print(email, traceback.format_exc())
             await transaction.rollback()
-            return send_json({"msg": "Internal Error: 2-4\nContact Developer"}, 520)
+            return send_json({"msg": "Internal Error: 3-4\nContact Developer"}, 520)
 
     except Exception as e:
         print(traceback.format_exc())
-        return send_json({"msg": "Internal Error: 4-6x\nContact Developer"}, 520)
+        return send_json({"msg": "Internal Error: 5-6x\nContact Developer"}, 520)
 
 
 if __name__ == "__main__":
