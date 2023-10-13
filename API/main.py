@@ -29,6 +29,7 @@ CREATE TABLE `attendees` (
     `aloy` BOOLEAN NOT NULL,
     `payment_type` VARCHAR(20) NOT NULL,
     `paid` BOOLEAN,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`email`),
     INDEX `idx_email` (`email`)
 );
@@ -148,14 +149,10 @@ async def check(email: str):
 
                 # second payment can be null,pending, verified and first payment can be pending, verified
 
-                if result[1] == "pending":  # second pending
-                    return send_json({"msg": "pending2"}, 310)
-                    # if result[1] == "verified":
-                    #     return send_json({"msg": "verified2"}, 310)
-                elif result[0] == "pending":  # first pending
-                    return send_json({"msg": "pending1"}, 310)
+                if result[1] == "pending" or result[0] == "pending":  # second pending
+                    return send_json({"msg": "pending"}, 310)
                 elif result[0] == "verified":  # first verified
-                    return send_json({"msg": "verified1"}, 310)
+                    return send_json({"msg": "verified"}, 310)
             else:  # payment type is not set
                 return send_json(
                     {"msg": "Payment Type not set\nError Code:1-2 Contact Developer"},
@@ -259,8 +256,8 @@ async def register(request: Request):
         return send_json({"msg": "Internal Error: 4-6x\nContact Developer"}, 520)
 
 
-@app.post("/partial")
-async def partial(request: Request):
+@app.post("/second")
+async def second(request: Request):
     try:
         data = await request.json()
         try:
