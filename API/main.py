@@ -300,9 +300,7 @@ async def partial(request: Request):
                 return send_json({"msg": "pending2"}, 310)
                 # if result[1] == "verified":
                 #     return send_json({"msg": "verified2"}, 310)
-            elif result[0] == "pending":  # first pending
-                return send_json({"msg": "pending1"}, 310)
-            elif result[0] == "verified":  # first verified
+            elif result[0] == "verified" and not:  # first verified
                 return send_json({"msg": "verified1"}, 310)
         transaction = await database.transaction()
         try:
