@@ -110,7 +110,21 @@ async def is_email_exists(email):
 
 @app.get("/display")
 async def display():
-    query = "SELECT * FROM attendees"
+    query = """SELECT a.email, a.name, 
+    CASE
+        WHEN a.payment_type = 'partial' AND p.second_status = 'pending' THEN 'second'
+        WHEN a.payment_type = 'partial' AND p.first_status = 'pending' THEN 'first'
+        ELSE 'full'
+    END AS payment_type,
+    CASE
+        WHEN a.payment_type = 'partial' AND p.second_status = 'pending' THEN p.second_ref
+        WHEN a.payment_type = 'partial' AND p.first_status = 'pending' THEN p.first_ref
+        ELSE f.ref
+    END AS latest_ref
+    FROM attendees AS a
+    LEFT JOIN partial AS p ON a.email = p.email
+    LEFT JOIN full AS f ON a.email = f.email;
+""" #email, name, payment_type, latest_ref
     result = await database.fetch_all(query=query)
     return list(map(list, result))
 
