@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 import re
@@ -47,8 +48,10 @@ CREATE TABLE `aloy` (
 CREATE TABLE `partial` (
     `email` VARCHAR(200) NOT NULL UNIQUE,
     `first_ref` VARCHAR(12) NOT NULL UNIQUE,
+    `first_date_paid` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
     `first_status` VARCHAR(20) NOT NULL,
     `second_ref` VARCHAR(12) UNIQUE,
+    `second_date_paid` TIMESTAMP, 
     `second_status` VARCHAR(20),
     PRIMARY KEY (`email`),
     INDEX `idx_first_ref` (`first_ref`),
@@ -56,9 +59,11 @@ CREATE TABLE `partial` (
     FOREIGN KEY (`email`) REFERENCES `attendees`(`email`) ON DELETE CASCADE
 );
 
+
 CREATE TABLE `full` (
     `email` VARCHAR(200) NOT NULL UNIQUE,
     `ref` VARCHAR(12) NOT NULL UNIQUE,
+    `date_paid` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `status` VARCHAR(20) NOT NULL,
     PRIMARY KEY (`email`),
     INDEX `idx_ref` (`ref`),
@@ -110,23 +115,36 @@ async def is_email_exists(email):
 
 @app.get("/display")
 async def display():
-    query = """SELECT a.email, a.name, 
+    query = """SELECT a.email, a.name, a.wa_num, a.ph_num,
     CASE
-        WHEN a.payment_type = 'partial' AND p.second_status = 'pending' THEN 'second'
-        WHEN a.payment_type = 'partial' AND p.first_status = 'pending' THEN 'first'
-        ELSE 'full'
+        WHEN a.aloy = 1 THEN al.regno 
+        ELSE NULL
+    END AS regno,
+    CASE
+        WHEN a.payment_type = 'partial' AND p.second_status = 'pending' THEN 'Second'
+        WHEN a.payment_type = 'partial' AND p.first_status = 'pending' THEN 'First'
+        ELSE 'Full'
     END AS payment_type,
     CASE
         WHEN a.payment_type = 'partial' AND p.second_status = 'pending' THEN p.second_ref
         WHEN a.payment_type = 'partial' AND p.first_status = 'pending' THEN p.first_ref
         ELSE f.ref
-    END AS latest_ref
+    END AS upi_ref,
+    CASE
+        WHEN a.payment_type = 'partial' AND p.second_status = 'pending' THEN p.second_date_paid
+        WHEN a.payment_type = 'partial' AND p.first_status = 'pending' THEN p.first_date_paid
+        ELSE f.date_paid
+    END AS date_paid
     FROM attendees AS a
+    LEFT JOIN aloy AS al ON a.email = al.email
     LEFT JOIN partial AS p ON a.email = p.email
     LEFT JOIN full AS f ON a.email = f.email;
-""" #email, name, payment_type, latest_ref
+"""  # email, name, payment_type, latest_ref
     result = await database.fetch_all(query=query)
-    return list(map(list, result))
+    result = list(map(list, result))
+    for i in result:
+        print(type(i[7]))
+    return result
 
 
 async def get_payment_type(email):
