@@ -69,7 +69,12 @@ CREATE TABLE `full` (
     INDEX `idx_ref` (`ref`),
     FOREIGN KEY (`email`) REFERENCES `attendees`(`email`) ON DELETE CASCADE
 );
-
+CREATE TABLE `admin` (
+    `token` VARCHAR(16) NOT NULL UNIQUE,
+    `name` VARCHAR(100) NOT NULL,
+    PRIMARY KEY (`token`),
+    INDEX `idx_name` (`token`)
+);
     """
 
 
@@ -113,8 +118,11 @@ async def is_email_exists(email):
     return bool(result)
 
 
-@app.get("/display")
-async def display():
+@app.post("/display")
+async def display(request: Request):
+    data = await request.json()
+    if not data.get("token", "") == "tedxsac":
+        return send_json({"msg": "Error 1: Token Must be a 4 digit number"}, 520)
     query = """SELECT a.email, a.name, a.wa_num, a.ph_num,
     CASE
         WHEN a.aloy = 1 THEN al.regno 
@@ -139,11 +147,9 @@ async def display():
     LEFT JOIN aloy AS al ON a.email = al.email
     LEFT JOIN partial AS p ON a.email = p.email
     LEFT JOIN full AS f ON a.email = f.email;
-"""  # email, name, payment_type, latest_ref
+"""  # email, name, wa_num, ph_num, regno, payment_type, upi_ref, date_paid
     result = await database.fetch_all(query=query)
     result = list(map(list, result))
-    for i in result:
-        print(type(i[7]))
     return result
 
 
@@ -160,6 +166,57 @@ async def is_payment_done(email):
     result = await database.fetch_one(query=query, values=values)
     return bool(result[0])
 
+
+@app.post("/login")
+async def login(request: Request):
+    try:
+        data = await request.json()
+        if data.get("token", "") == "tedxsac":
+            return send_json({"msg": "Success"}, 200)
+        else:
+            return send_json({"msg": "Error: Token Must be a 4 digit number"}, 520)
+    except Exception as e:
+        print(traceback.format_exc())
+        return send_json({"msg": "Eror: Token must be 4 digit number"}, 520)
+
+@app.post("/approve")
+async def approve(request: Request):
+    try:
+        data = await request.json()
+        try:
+            token, email = (
+                data.get(key, "").strip() for key in ["token", "email"]
+            )
+        except AttributeError as e:
+            return send_json({"msg": "Error Request"}, 520)
+        email = email.lower()
+
+        if not all([token, email]):
+            return send_json({"msg": "Invalid Request"}, 520)
+
+        if not is_valid(email, EMAIL_PATTERN):
+            return send_json({"msg": "Invalid Email"}, 520)
+
+        #check token
+        query = "SELECT 1 FROM admin WHERE `token` = :token"
+        values = {"token": token}
+        result = await database.fetch_one(query=query, values=values)
+        if not bool(result):
+            return send_json({"msg": "Invalid Token"}, 520)
+        print(result)
+        name = result[0]
+        if payment_type == "partial":
+            query = "UPDATE `partial` SET `first_status` = :status WHERE `email` = :email"
+            values = {"email": email, "status": "verified"}
+        elif payment_type == "full":
+            query = "UPDATE `full` SET `status` = :status WHERE `email` = :email"
+            values = {"email": email, "status": "verified"}
+        await database.execute(query=query, values=values)
+        return send_json({"msg": "Success"}, 200)
+
+    except Exception as e:
+        print(traceback.format_exc())
+        return send_json({"msg": "Internal Error: a.2\nContact Developer"}, 520)
 
 @app.get("/check/{email}")
 async def check(email: str):
